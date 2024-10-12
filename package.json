@@ -1,0 +1,45 @@
+{
+  "name": "designsystemassistant",
+  "displayName": "Design System Assistant",
+  "description": "Provides class name suggestions based on your SCSS design system",
+  "version": "0.0.3",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onLanguage:html",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Design System Assistant",
+      "properties": {
+        "designSystemAssistant.scssFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Folder path containing your SCSS files, relative to workspace root"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.93.0",
+    "@types/node": "^14.x",
+    "typescript": "^4.3.2"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.0.0",
+    "vscode-languageserver": "^8.0.0",
+    "vscode-languageserver-textdocument": "^1.0.0"
+  }
+}
