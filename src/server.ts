@@ -100,8 +100,13 @@ function findScssFiles(workspaceUri: string): string[] {
   connection.console.log(`Found ${scssFiles.length} SCSS files`);
   return scssFiles;
 }
+
+
+// server.ts (focusing on the parseScssFiles function and related helpers)
+
 function parseScssFiles(files: string[]): string[] {
   const classNames: Set<string> = new Set();
+  let variables: { [key: string]: any } = {};
 
   for (const file of files) {
     const content = fs.readFileSync(file, 'utf-8');
@@ -111,16 +116,8 @@ function parseScssFiles(files: string[]): string[] {
     let variableMatch;
     while ((variableMatch = variableRegex.exec(content)) !== null) {
       const [, variableName, variableContent] = variableMatch;
-      const entries = variableContent.split(',').map(entry => entry.trim());
-      entries.forEach(entry => {
-        const [key] = entry.split(':');
-        if (key) {
-          const cleanKey = key.replace(/['"]/g, '').trim();
-          if (isValidClassName(cleanKey)) {
-            classNames.add(cleanKey);
-          }
-        }
-      });
+      variables[variableName] = parseVariableContent(variableContent);
+      addClassesFromVariable(variableContent, classNames);
     }
 
     // Parse mixin calls
@@ -128,26 +125,98 @@ function parseScssFiles(files: string[]): string[] {
     let mixinMatch;
     while ((mixinMatch = mixinCallRegex.exec(content)) !== null) {
       const [, mixinName, mixinArgs] = mixinMatch;
-      if (mixinName.startsWith('ds4-scale-') || mixinName === 'style-class') {
-        const args = mixinArgs.split(',').map(arg => arg.trim());
-        const prefix = args[0].replace(/['"]/g, '').trim();
-        if (isValidClassName(prefix)) {
-          classNames.add(prefix);
-        }
-        
-        // For style-class mixin, add the variable name as a prefix
-        if (mixinName === 'style-class' && args.length > 1) {
-          const variableName = args[1].replace(/['"$]/g, '').trim();
-          addClassesFromVariable(content, variableName, classNames);
-        }
+      processMixinCall(mixinName, mixinArgs, variables, classNames);
+    }
+
+    // Parse class declarations (from previous version)
+    const classRegex = /\.([a-zA-Z0-9_-]+)\s*{/g;
+    let classMatch;
+    while ((classMatch = classRegex.exec(content)) !== null) {
+      if (isValidClassName(classMatch[1])) {
+        classNames.add(classMatch[1]);
       }
     }
   }
 
   return Array.from(classNames);
 }
+
+function parseVariableContent(content: string): any {
+  const entries = content.split(',').map(entry => entry.trim());
+  const result: { [key: string]: any } = {};
+  entries.forEach(entry => {
+    const [key, value] = entry.split(':').map(part => part.trim());
+    result[key.replace(/['"]/g, '')] = value;
+  });
+  return result;
+}
+
+function addClassesFromVariable(content: string, classNames: Set<string>) {
+  const entries = content.split(',').map(entry => entry.trim());
+  entries.forEach(entry => {
+    const [key] = entry.split(':');
+    if (key) {
+      const cleanKey = key.replace(/['"]/g, '').trim();
+      if (isValidClassName(cleanKey)) {
+        classNames.add(cleanKey);
+      }
+    }
+  });
+}
+
+function processMixinCall(mixinName: string, mixinArgs: string, variables: { [key: string]: any }, classNames: Set<string>) {
+  const args = mixinArgs.split(',').map(arg => arg.trim().replace(/['"]/g, ''));
+
+  switch (mixinName) {
+    case 'ds4-scale-class':
+      if (args.length >= 3) {
+        const [name, mapName, scalesName] = args;
+        const map = variables[mapName];
+        const scales = variables[scalesName];
+        if (map && scales) {
+          Object.keys(map).forEach(key => {
+            Object.keys(scales).forEach(scaleKey => {
+              const className = `${name}${key}-${scaleKey}`;
+              if (isValidClassName(className)) {
+                classNames.add(className);
+              }
+            });
+          });
+        }
+      }
+      break;
+    case 'ds4-scale-font-class':
+    case 'style-class':
+      if (args.length >= 2) {
+        const [, mapName] = args;
+        const map = variables[mapName];
+        if (map) {
+          Object.keys(map).forEach(key => {
+            if (isValidClassName(key)) {
+              classNames.add(key);
+            }
+          });
+        }
+      }
+      break;
+    case 'ds4-scale-border-radius-class':
+    case 'ds4-border-radius-class':
+      if (args.length >= 1) {
+        const mapName = args[0];
+        const map = variables[mapName];
+        if (map) {
+          Object.keys(map).forEach(key => {
+            if (isValidClassName(key)) {
+              classNames.add(key);
+            }
+          });
+        }
+      }
+      break;
+  }
+}
+
 function isValidClassName(name: string): boolean {
-  // Exclude specific patterns and formats
   const invalidPatterns = [
     /^\$/,  // Starts with $
     /^#/,   // Starts with #
@@ -164,23 +233,23 @@ function isValidClassName(name: string): boolean {
   return !invalidPatterns.some(pattern => pattern.test(name));
 }
 
-function addClassesFromVariable(content: string, variableName: string, classNames: Set<string>) {
-  const variableRegex = new RegExp(`\\$${variableName}:\\s*\\((([\\s\\S]*?))\\)\\s*!default;`);
-  const match = variableRegex.exec(content);
-  if (match) {
-    const variableContent = match[1];
-    const entries = variableContent.split(',').map(entry => entry.trim());
-    entries.forEach(entry => {
-      const [key] = entry.split(':');
-      if (key) {
-        const cleanKey = key.replace(/['"]/g, '').trim();
-        if (isValidClassName(cleanKey)) {
-          classNames.add(cleanKey);
-        }
-      }
-    });
-  }
-}
+// function addClassesFromVariable(content: string, variableName: string, classNames: Set<string>) {
+//   const variableRegex = new RegExp(`\\$${variableName}:\\s*\\((([\\s\\S]*?))\\)\\s*!default;`);
+//   const match = variableRegex.exec(content);
+//   if (match) {
+//     const variableContent = match[1];
+//     const entries = variableContent.split(',').map(entry => entry.trim());
+//     entries.forEach(entry => {
+//       const [key] = entry.split(':');
+//       if (key) {
+//         const cleanKey = key.replace(/['"]/g, '').trim();
+//         if (isValidClassName(cleanKey)) {
+//           classNames.add(cleanKey);
+//         }
+//       }
+//     });
+//   }
+// }
 
 
 documents.listen(connection);

@@ -2,7 +2,7 @@
   "name": "designsystemassistant",
   "displayName": "Design System Assistant",
   "description": "Provides class name suggestions based on your SCSS design system",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.93.0"
   },
